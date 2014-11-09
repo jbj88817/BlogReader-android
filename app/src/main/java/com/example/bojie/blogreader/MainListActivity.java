@@ -8,142 +8,113 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
-import android.view.MenuItem;
 import android.widget.Toast;
 
-import org.json.JSONException;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
-
 
 public class MainListActivity extends ListActivity {
 
-    protected String[] mBlogPostTitle;
+    protected String[] mBlogPostTitles;
     public static final int NUMBER_OF_POSTS = 20;
     public static final String TAG = MainListActivity.class.getSimpleName();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main_list);
+        if (isNetworkAvailable()) {
+            GetBlogPostsTask getBlogPostsTask = new GetBlogPostsTask();
+            getBlogPostsTask.execute();
+            //Toast.makeText(this, getString(R.string.no_items),Toast.LENGTH_LONG).show();
+        }
+        else{
+            Toast.makeText(this, "Network is unavailable!", Toast.LENGTH_LONG).show();
+        }
 
-         if(isNetworkAvailable()){
-             GetBlogPostsTask getBlogPostsTask = new GetBlogPostsTask();
-             getBlogPostsTask.execute();
-         }else{
-             Toast.makeText(this, "Network is unavailable!",
-                     Toast.LENGTH_LONG).show();
-         }
-
-
-        //Toast.makeText(this, R.string.no_item, Toast.LENGTH_LONG).show();
     }
-
-    private boolean isNetworkAvailable() {
-
-        ConnectivityManager manager = (ConnectivityManager) getSystemService
-                (Context.CONNECTIVITY_SERVICE);
+    private boolean isNetworkAvailable () {
+        ConnectivityManager manager = (ConnectivityManager)
+                getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = manager.getActiveNetworkInfo();
-        boolean isAvailable = false;
+
+        boolean isAvailable=false;
         if(networkInfo != null && networkInfo.isConnected()){
-            isAvailable = true;
+            isAvailable=true;
         }
 
         return isAvailable;
-
     }
 
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
+    public boolean onCreateOptionsMenu (Menu menu){
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main_list, menu);
         return true;
     }
 
-    private class GetBlogPostsTask extends AsyncTask<Object, Void, String>{
+    private class GetBlogPostsTask extends AsyncTask<Object, Void, String> {
 
         @Override
-        protected String doInBackground(Object[] params) {
-            HttpURLConnection urlConnection = null;
-            BufferedReader reader = null;
-
-            // Will contain the raw JSON response as a string.
-            String forecastJsonStr = null;
+        protected String doInBackground(Object[] objects) {
+            int responseCode = -1;
 
             try {
-                URL url = new URL("http://blog.teamtreehouse.com/api/get_recent_summary/?count=20");
+                URL blogFeedUrl = new URL(
+                        "http://blog.teamtreehouse.com/api/get_recent_summary/?count"
+                                + NUMBER_OF_POSTS);
+                HttpURLConnection connection = (HttpURLConnection) blogFeedUrl.openConnection();
+                connection.connect();
 
-                urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestMethod("GET");
-                urlConnection.connect();
+                //Creating are response code so that we can get data from the internet
+                responseCode = connection.getResponseCode();
+                if(responseCode==HttpURLConnection.HTTP_OK){
+                    InputStream inputStream = connection.getInputStream(); //store the data into the input stream
+                    Reader reader = new InputStreamReader(inputStream);//read the input stream
+                    int contentLength = connection.getContentLength();//get the number of characters to read in
+                    char [] charArray = new char[contentLength];//create the char array to store the the data
+                    reader.read(charArray); //read and store the data array into the char array
+                    String responseData = new String(charArray);//create a new string and convert and store from char to string
 
-                // Read the input stream into a String
-                InputStream inputStream = urlConnection.getInputStream();
-                StringBuffer buffer = new StringBuffer();
-                if (inputStream == null) {
-                    // Nothing to do.
-                    return null;
-                }
-                reader = new BufferedReader(new InputStreamReader(inputStream));
+                    //This creates are Json object
+                    JSONObject jSonResponse = new JSONObject(responseData);
+                    String status = jSonResponse.getString("status");
+                    Log.v(TAG, status);
 
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    // Since it's JSON, adding a newline isn't necessary (it won't affect parsing)
-                    // But it does make debugging a *lot* easier if you print out the completed
-                    // buffer for debugging.
-                    buffer.append(line + "\n");
-                }
+                    //Creat's an array so we can store are blog posts
+                    JSONArray jSonPost = jSonResponse.getJSONArray("posts");
+                    //A for loop so are post can run simitanously untill conditions are met.
+                    for (int i =0; i < jSonPost.length(); i++){
+                        JSONObject jsonPost = jSonPost.getJSONObject(i);
+                        String title = jsonPost.getString("title");
+                        Log.v(TAG, "posts " + i + ": " + title);
 
-                if (buffer.length() == 0) {
-                    // Stream was empty.  No point in parsing.
-                    return null;
-                }
-                forecastJsonStr = buffer.toString();
-
-                Log.v(TAG,"Forecast JSON String: " + forecastJsonStr);
-
-            } catch (IOException e) {
-                Log.e(TAG, "Error ", e);
-                // If the code didn't successfully get the weather data, there's no point in attemping
-                // to parse it.
-                return null;
-            } finally
-
-            {
-                if (urlConnection != null) {
-                    urlConnection.disconnect();
-                }
-                if (reader != null) {
-                    try {
-                        reader.close();
-                    } catch (final IOException e) {
-                        Log.e(TAG, "Error closing stream", e);
                     }
                 }
+                else{
+                    Log.i(TAG, "Unsuccessful HTTP Response Code: " + responseCode);
+                }
+                Log.i(TAG, "Code: " + responseCode);
+            } catch (MalformedURLException e) {
+                //e.printStackTrace();
+                Log.e(TAG, "Exception caught: ", e);
+            } catch (IOException e) {
+                Log.e(TAG, "Exception caught: ", e);
+
+            } catch (Exception e) {
+                Log.e(TAG, "Exception caught: ", e);
             }
-
-
-            return null;
+            return "code: " + responseCode;
         }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
     }
 }
