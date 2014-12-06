@@ -5,6 +5,8 @@
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
     <string name="no_item">No item to display</string>
+    <string name="error_title">Oops!</string>
+    <string name="error_message">There was an error!</string>
 
     <string-array name="Androids">
         <item>Android beta</item>
